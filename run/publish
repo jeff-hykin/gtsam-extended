@@ -1,0 +1,62 @@
+#!/usr/bin/env -S deno run --allow-all --no-lock
+import fs from "node:fs"
+import * as dax from "https://esm.sh/@jsr/david__dax@0.43.2/mod.ts"
+import * as path from "https://esm.sh/jsr/@std/path@1.1.2"
+import { env, aliases, $stdout, $stderr, initHelpers, iterateOver } from "https://esm.sh/gh/jeff-hykin/bash2deno@0.1.0.2/helpers.js"
+let { $, appendTo, overwrite, hasCommand, makeScope, settings, exitCodeOfLastChildProcess } = initHelpers({ dax })
+import { FileSystem, glob } from "https://deno.land/x/quickr@0.8.6/main/file_system.js"
+
+// Change to repo root
+await $`cd ${FileSystem.thisFolder}/..`
+
+// Clean old builds
+await $`rm -rf ./renamed_wheels`
+
+// Rename wheel for PyPI upload (keeps 'gtsam' import, changes distribution name)
+console.log("Renaming wheel for PyPI upload...")
+await $`python rename_wheel.py`
+
+// Check if renamed wheels exist
+if (!fs.existsSync(`./renamed_wheels`) || !fs.lstatSync(`./renamed_wheels`).isDirectory()) {
+    console.error("ERROR: renamed_wheels directory not found. Did rename_wheel.py fail?")
+    Deno.exit(1)
+}
+
+const wheels = await glob(`renamed_wheels/*.whl`)
+if (wheels.length === 0) {
+    console.error("ERROR: No wheels found in renamed_wheels/")
+    Deno.exit(1)
+}
+
+console.log(`Found ${wheels.length} wheel(s) to upload`)
+
+// Validate wheels before upload
+console.log("Validating wheels...")
+var { code: checkCode } = await $`twine check ${wheels}`
+if (checkCode !== 0) {
+    console.error("ERROR: Wheel validation failed")
+    Deno.exit(1)
+}
+
+// Upload all wheels to PyPI
+await $`stty sane 2>/dev/null`
+console.log("Uploading wheels to PyPI...")
+var { code } = await $`twine upload ${wheels}`
+
+if (code !== 0) {
+    console.error("ERROR: Upload failed")
+    Deno.exit(1)
+}
+
+console.log("Successfully uploaded all wheels!")
+
+// Tag the version
+import { parse } from "https://deno.land/std@0.224.0/toml/mod.ts"
+var text = await Deno.readTextFile(`${FileSystem.thisFolder}/../pyproject.toml`)
+var version = parse(text).project.version
+
+console.log(`Tagging version: ${version}`)
+await $`git tag v${version} 2>/dev/null || echo "Tag already exists"`
+await $`git push origin v${version} 2>/dev/null || echo "Tag already pushed"`
+
+console.log("Done!")

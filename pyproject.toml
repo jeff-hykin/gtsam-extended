@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gtsam-macos"
+version = "4.3a1.post1"
+description = "GTSAM (Georgia Tech Smoothing And Mapping) with macOS arm64 support"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "BSD-2-Clause"
+dependencies = [
+    "numpy",
+]
+authors = [
+    {name = "Community Contributor"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: MacOS",
+]
+keywords = ["gtsam", "slam", "robotics", "pose-graph", "isam2", "macos", "arm64"]
+
+[project.urls]
+Homepage = "https://gtsam.org/"
+Repository = "https://github.com/jeff-hykin/gtsam_macos"
+
+[tool.setuptools]
+packages = ["gtsam_macos"]
