@@ -70,11 +70,14 @@ def delete_rpath(binary: str, rpath: str):
 
 
 def codesign(path: str):
-    """Ad-hoc codesign a binary."""
-    subprocess.run(
-        ["codesign", "--force", "--sign", "-", path],
-        capture_output=True,
-    )
+    """Ad-hoc codesign a binary (optional, may not be available in Nix sandbox)."""
+    try:
+        subprocess.run(
+            ["codesign", "--force", "--sign", "-", path],
+            capture_output=True,
+        )
+    except FileNotFoundError:
+        pass  # codesign not available in Nix sandbox, skip
 
 
 def is_system_lib(path: str) -> bool:
