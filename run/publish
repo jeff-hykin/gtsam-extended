@@ -9,11 +9,13 @@ import { FileSystem, glob } from "https://deno.land/x/quickr@0.8.6/main/file_sys
 // Change to repo root
 await $`cd ${FileSystem.thisFolder}/..`
 
-// Clean old builds
-await $`rm -rf ./renamed_wheels`
+// Step 1: Download wheels from PyPI + collect local builds
+console.log("=== Step 1: Download and collect wheels ===")
+await $`python download_wheels.py`
 
-// Rename wheel for PyPI upload (keeps 'gtsam' import, changes distribution name)
-console.log("Renaming wheel for PyPI upload...")
+// Step 2: Rename all wheels to gtsam_extended
+console.log("\n=== Step 2: Rename wheels ===")
+await $`rm -rf ./renamed_wheels`
 await $`python rename_wheel.py`
 
 // Check if renamed wheels exist
@@ -28,19 +30,19 @@ if (wheels.length === 0) {
     Deno.exit(1)
 }
 
-console.log(`Found ${wheels.length} wheel(s) to upload`)
+console.log(`\nFound ${wheels.length} wheel(s) to upload`)
 
-// Validate wheels before upload
-console.log("Validating wheels...")
+// Step 3: Validate wheels before upload
+console.log("\n=== Step 3: Validate ===")
 var { code: checkCode } = await $`twine check ${wheels}`
 if (checkCode !== 0) {
     console.error("ERROR: Wheel validation failed")
     Deno.exit(1)
 }
 
-// Upload all wheels to PyPI
+// Step 4: Upload all wheels to PyPI
 await $`stty sane 2>/dev/null`
-console.log("Uploading wheels to PyPI...")
+console.log("\n=== Step 4: Upload to PyPI ===")
 var { code } = await $`twine upload ${wheels}`
 
 if (code !== 0) {

@@ -1,27 +1,43 @@
 #!/usr/bin/env python3
 """
-Rename GTSAM wheel distribution name from 'gtsam' to 'gtsam_macos'.
+Rename wheel distribution names to 'gtsam_extended' with a normalized version.
 
-This changes the distribution name (what PyPI sees) while keeping the
-internal 'gtsam' package intact (so `import gtsam` still works).
+Takes wheels with distribution name 'gtsam' or 'gtsam_develop' and renames
+them to 'gtsam_extended', keeping the internal 'gtsam' package intact
+so `import gtsam` still works.
 
-This is the same approach used by numpy, torch, etc. for unofficial builds.
+The version is normalized to match pyproject.toml so all wheels can be
+uploaded together to PyPI.
 """
 
 import os
 import re
 import sys
-import csv
 import hashlib
 import base64
 import zipfile
 import shutil
 import tempfile
 from pathlib import Path
-from io import StringIO
 
-OLD_DIST_NAME = "gtsam"
-NEW_DIST_NAME = "gtsam_macos"
+NEW_DIST_NAME = "gtsam_extended"
+
+# Distribution names we know how to rename
+KNOWN_DIST_NAMES = {"gtsam", "gtsam_develop", "gtsam_universal"}
+
+
+def get_target_version():
+    """Read the target version from pyproject.toml."""
+    pyproject = Path(__file__).parent / "pyproject.toml"
+    if not pyproject.exists():
+        print("ERROR: pyproject.toml not found")
+        sys.exit(1)
+    text = pyproject.read_text()
+    match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    if not match:
+        print("ERROR: Could not find version in pyproject.toml")
+        sys.exit(1)
+    return match.group(1)
 
 
 def hash_file(path):
@@ -34,115 +50,153 @@ def hash_file(path):
     return f"sha256={digest}"
 
 
-def rename_wheel(wheel_path, output_dir):
+def detect_dist_name(wheel_path):
+    """Detect the distribution name and version from a wheel filename.
+
+    Returns (dist_name, version, tags) where tags is e.g. 'cp312-cp312-macosx_14_0_arm64'.
+    """
+    stem = Path(wheel_path).stem
+    parts = stem.split("-")
+    # Find where version starts (first part that begins with a digit)
+    for i, part in enumerate(parts):
+        if part and part[0].isdigit():
+            dist_name = "_".join(parts[:i])
+            # version is the next part, tags are the rest
+            version = parts[i]
+            tags = "-".join(parts[i + 1:])
+            return dist_name, version, tags
+    return parts[0], parts[1] if len(parts) > 1 else "0", "-".join(parts[2:])
+
+
+def rename_wheel(wheel_path, output_dir, target_version):
     wheel_path = Path(wheel_path)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Parse wheel filename
-    # gtsam-4.3a1-cp312-cp312-macosx_14_0_arm64.whl
-    parts = wheel_path.stem.split("-")
-    version = parts[1]
-    tags = "-".join(parts[2:])  # cp312-cp312-macosx_14_0_arm64
+    old_dist_name, old_version, tags = detect_dist_name(wheel_path)
 
-    new_wheel_name = f"{NEW_DIST_NAME}-{version}-{tags}.whl"
+    if old_dist_name not in KNOWN_DIST_NAMES and old_dist_name != NEW_DIST_NAME:
+        print(f"WARNING: Unknown distribution name '{old_dist_name}' in {wheel_path.name}, renaming anyway")
 
-    old_dist_info = f"{OLD_DIST_NAME}-{version}.dist-info"
-    new_dist_info = f"{NEW_DIST_NAME}-{version}.dist-info"
+    new_wheel_name = f"{NEW_DIST_NAME}-{target_version}-{tags}.whl"
+
+    # Find the dist-info directory name pattern
+    old_dist_info_pattern = f"{old_dist_name}-{old_version}.dist-info"
 
     # Unpack
     tmpdir = tempfile.mkdtemp()
     with zipfile.ZipFile(wheel_path, "r") as zf:
         zf.extractall(tmpdir)
 
-    # Rename dist-info directory
-    old_info_path = Path(tmpdir) / old_dist_info
-    new_info_path = Path(tmpdir) / new_dist_info
+    # Find dist-info directory
+    old_info_path = None
+    for entry in Path(tmpdir).iterdir():
+        if entry.is_dir() and entry.name.endswith(".dist-info"):
+            # Match by distribution name prefix
+            if entry.name.startswith(f"{old_dist_name}-"):
+                old_info_path = entry
+                break
 
-    if not old_info_path.exists():
-        print(f"ERROR: {old_dist_info} not found in wheel")
-        sys.exit(1)
+    if old_info_path is None:
+        # Try any .dist-info
+        for entry in Path(tmpdir).iterdir():
+            if entry.is_dir() and entry.name.endswith(".dist-info"):
+                old_info_path = entry
+                print(f"  Using dist-info: {entry.name}")
+                break
 
+    if old_info_path is None:
+        print(f"ERROR: No .dist-info found in {wheel_path.name}")
+        shutil.rmtree(tmpdir)
+        return None
+
+    # New dist-info name with normalized version
+    new_info_name = f"{NEW_DIST_NAME}-{target_version}.dist-info"
+    new_info_path = old_info_path.parent / new_info_name
     old_info_path.rename(new_info_path)
 
-    # Update METADATA: change Name field
+    # Update METADATA
     metadata_path = new_info_path / "METADATA"
-    metadata = metadata_path.read_text()
-    metadata = re.sub(
-        r"^Name: gtsam$",
-        f"Name: {NEW_DIST_NAME.replace('_', '-')}",
-        metadata,
-        flags=re.MULTILINE,
-    )
-    metadata_path.write_text(metadata)
-
-    # Update WHEEL file if it references the old name
-    wheel_meta_path = new_info_path / "WHEEL"
-    if wheel_meta_path.exists():
-        wheel_meta = wheel_meta_path.read_text()
-        # Usually no changes needed, but just in case
-        wheel_meta_path.write_text(wheel_meta)
-
-    # Update top_level.txt if it exists (keep 'gtsam' since that's the importable package)
-    top_level_path = new_info_path / "top_level.txt"
-    if top_level_path.exists():
-        # Keep as-is — the import name is still 'gtsam'
-        pass
+    if metadata_path.exists():
+        metadata = metadata_path.read_text()
+        # Replace Name
+        metadata = re.sub(
+            r"^Name: .+$",
+            f"Name: {NEW_DIST_NAME.replace('_', '-')}",
+            metadata,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        # Replace Version
+        metadata = re.sub(
+            r"^Version: .+$",
+            f"Version: {target_version}",
+            metadata,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        metadata_path.write_text(metadata)
 
     # Rebuild RECORD
     record_path = new_info_path / "RECORD"
     record_lines = []
 
     for root, dirs, files in os.walk(tmpdir):
-        for fname in files:
+        for fname in sorted(files):
             fpath = Path(root) / fname
             arcname = str(fpath.relative_to(tmpdir))
 
-            # RECORD itself gets no hash
-            if arcname == str(Path(new_dist_info) / "RECORD"):
+            if fpath == record_path:
                 continue
 
             file_hash = hash_file(fpath)
             file_size = fpath.stat().st_size
             record_lines.append(f"{arcname},{file_hash},{file_size}")
 
-    # Add RECORD entry (no hash for itself)
-    record_lines.append(f"{new_dist_info}/RECORD,,")
-    record_path.write_text("\n".join(record_lines) + "\n")
+    record_lines.append(f"{new_info_name}/RECORD,,")
+    record_path.write_text("\n".join(sorted(record_lines)) + "\n")
 
     # Repack
     new_wheel_path = output_dir / new_wheel_name
     with zipfile.ZipFile(new_wheel_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(tmpdir):
-            for fname in files:
+            for fname in sorted(files):
                 fpath = Path(root) / fname
                 arcname = str(fpath.relative_to(tmpdir))
                 zf.write(fpath, arcname)
 
     shutil.rmtree(tmpdir)
 
-    print(f"Renamed: {wheel_path.name} -> {new_wheel_name}")
+    version_note = "" if old_version == target_version else f" (version {old_version} -> {target_version})"
+    print(f"  {wheel_path.name} -> {new_wheel_name}{version_note}")
     return new_wheel_path
 
 
 def main():
-    import glob
+    target_version = get_target_version()
+    print(f"Target version (from pyproject.toml): {target_version}\n")
 
-    # Find wheels in result/
-    wheels = glob.glob("result/gtsam-*.whl")
+    input_dir = Path("wheels_input")
+
+    if not input_dir.exists():
+        print(f"ERROR: {input_dir}/ directory not found.")
+        print("Run download_wheels.py first to populate it.")
+        sys.exit(1)
+
+    wheels = list(input_dir.glob("*.whl"))
     if not wheels:
-        print("ERROR: No gtsam wheels found in result/")
-        print("Run 'nix build' first to generate the wheel.")
+        print(f"ERROR: No .whl files found in {input_dir}/")
         sys.exit(1)
 
     output_dir = Path("renamed_wheels")
     if output_dir.exists():
         shutil.rmtree(output_dir)
 
-    for wheel in wheels:
-        rename_wheel(wheel, output_dir)
+    print(f"Renaming {len(wheels)} wheel(s)...\n")
+    for wheel in sorted(wheels):
+        rename_wheel(wheel, output_dir, target_version)
 
-    print(f"\nRenamed wheels in: {output_dir}/")
+    print(f"\nOutput in: {output_dir}/")
     for whl in sorted(output_dir.glob("*.whl")):
         size_mb = whl.stat().st_size / (1024 * 1024)
         print(f"  {whl.name}  ({size_mb:.1f} MB)")

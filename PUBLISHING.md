@@ -1,73 +1,73 @@
 # Publishing to PyPI
 
-This package uploads the macOS arm64 GTSAM wheel to PyPI under the distribution name `gtsam-macos`.
+This package uploads GTSAM wheels to PyPI under the distribution name `gtsam-extended`.
 
 ## What Gets Uploaded
 
-One wheel file (currently):
-- `gtsam_macos-4.3a1-cp312-cp312-macosx_14_0_arm64.whl`
+Wheels from two sources, all renamed to `gtsam_extended` with a normalized version:
 
-The wheel:
-- Is ~27 MB (well under PyPI's 100 MB limit)
+**From PyPI (`gtsam-develop`):**
+- cp311/cp312/cp313/cp314 x macOS universal2
+- cp311/cp312/cp313/cp314 x Linux x86_64 (manylinux2014)
+- cp311/cp312/cp313/cp314 x Linux aarch64 (manylinux2014 — works on Jetson/Ubuntu 20.04+)
+
+**From local Nix build (`result/`):**
+- cp310 x macOS arm64 (and any other custom builds)
+
+Each wheel:
 - Contains the `gtsam` package (so `import gtsam` works)
-- Has distribution name `gtsam-macos` (so it doesn't conflict with the official `gtsam` package)
-- Bundles all non-system dylibs (boost, tbb, metis, etc.)
+- Has distribution name `gtsam-extended` (avoids conflict with official `gtsam` package)
+- Version normalized to match `pyproject.toml` so PyPI accepts the batch
 
-## Prerequisites
-
-1. Build the wheel first:
-   ```bash
-   nix build
-   ```
-
-2. Ensure `twine` is available (it's in the nix dev shell):
-   ```bash
-   nix develop
-   ```
-
-3. Have a `~/.pypirc` configured with your PyPI credentials, or be ready to enter them interactively.
-
-## Publishing
+## Quick Publish
 
 ```bash
 ./run/publish
 ```
 
 This will:
-1. Run `rename_wheel.py` to rename `gtsam` -> `gtsam_macos` distribution name
-2. Validate the wheel with `twine check`
-3. Upload to PyPI
-4. Tag the git version
+1. Download latest `gtsam-develop` wheels from PyPI
+2. Copy any locally-built wheels from `result/`
+3. Rename all to `gtsam_extended` with normalized version
+4. Validate with `twine check`
+5. Upload to PyPI
+6. Git-tag the version
 
-## Manual Publishing
-
-If you prefer to do it manually:
+## Manual Steps
 
 ```bash
-# 1. Rename the wheel
+# 1. Build local wheels (e.g. cp310)
+nix build .#gtsam-wheel-cp310
+
+# 2. Download existing wheels + collect local builds
+python download_wheels.py
+
+# 3. Rename all to gtsam_extended
 python rename_wheel.py
 
-# 2. Validate
+# 4. Validate
 twine check renamed_wheels/*.whl
 
-# 3. Upload
+# 5. Upload
 twine upload renamed_wheels/*.whl
 ```
 
 ## User Experience
 
-After publishing, users can:
-
 ```bash
-pip install gtsam-macos
+pip install gtsam-extended
+```
+
+```python
 import gtsam
 ```
 
+Works on macOS (arm64, x86_64), Linux (x86_64, aarch64/Jetson), Python 3.10-3.14.
+
 ## Version Bumping
 
-To publish a new version:
 1. Update `version` in `pyproject.toml` (e.g., `4.3a1.post2`)
-2. Rebuild: `nix build`
+2. Optionally rebuild local wheels: `nix build .#gtsam-wheel-cp310`
 3. Publish: `./run/publish`
 
-Note: The wheel's internal version comes from GTSAM's build (4.3a1). The `.postN` suffix in pyproject.toml is for tracking our packaging iterations.
+The rename script reads the version from `pyproject.toml` and normalizes all wheels to that version.
