@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Download existing GTSAM wheels from PyPI and collect locally-built ones
+set -euo pipefail
+cd "$(dirname "$0")/.."
+python3 download_wheels.py "$@"

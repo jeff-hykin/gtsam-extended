@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Build GTSAM wheels for specified Python versions (default: all)
+# Usage: ./run/build [cp310] [cp311] [cp312] [cp313]
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+VERSIONS=("${@:-cp310 cp311 cp312 cp313}")
+
+for ver in "${VERSIONS[@]}"; do
+    echo "=== Building gtsam-wheel-${ver} ==="
+    nix build ".#gtsam-wheel-${ver}" -o "result-${ver}"
+    echo "  Output: result-${ver}/"
+    ls -lh "result-${ver}"/*.whl
+    echo ""
+done
+
+echo "Done. Wheels are in result-*/ directories."
+echo "Run ./run/download_wheels to collect them + download PyPI wheels."

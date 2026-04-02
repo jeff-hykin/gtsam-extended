@@ -79,18 +79,21 @@ def download_pypi_wheels(package_name, output_dir):
 
 
 def collect_local_wheels(output_dir):
-    """Copy locally-built wheels from result/ into the output directory."""
-    result_dir = Path("result")
-    if not result_dir.exists():
-        print("\nNo result/ directory (run 'nix build' to create local wheels)")
-        return []
+    """Copy locally-built wheels from result/ and result-*/ into the output directory."""
+    import glob as globmod
 
-    local_wheels = list(result_dir.glob("*.whl"))
+    # Collect from result/ and result-*/ (created by ./run/build)
+    result_dirs = [Path("result")] + sorted(Path(".").glob("result-*"))
+    local_wheels = []
+    for d in result_dirs:
+        if d.exists():
+            local_wheels.extend(d.glob("*.whl"))
+
     if not local_wheels:
-        print("\nNo .whl files in result/")
+        print("\nNo local wheels found (run 'nix build' or './run/build' to create them)")
         return []
 
-    print(f"\nFound {len(local_wheels)} local wheel(s) in result/")
+    print(f"\nFound {len(local_wheels)} local wheel(s)")
     collected = []
     for whl in local_wheels:
         dest = output_dir / whl.name

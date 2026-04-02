@@ -1,19 +1,27 @@
 {
-  description = "Build GTSAM Python wheels for macOS";
+  description = "Build GTSAM Python wheels";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # nixos-24.11 still has python310
+    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-24.11";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils, ... }:
+  outputs = { self, nixpkgs, nixpkgs-stable, flake-utils, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+        pkgs-stable = import nixpkgs-stable { inherit system; };
+
+        # GTSAM version config — change these to build a different version
+        gtsamVersion = "4.3a1";
+        gtsamRev = "develop";  # git tag, branch, or commit hash
+        gtsamSha256 = "sha256-Uf71hmnRN5sXK5gWgCGkKUQlLWQALWH332wEmMsmHZI=";
 
         # All Python versions we build wheels for
         pythonVersions = {
-          "310" = pkgs.python310;
+          "310" = pkgs-stable.python310;  # from stable nixpkgs (dropped in unstable)
           "311" = pkgs.python311;
           "312" = pkgs.python312;
           "313" = pkgs.python313;
@@ -22,8 +30,8 @@
         gtsam-src = pkgs.fetchFromGitHub {
           owner = "borglab";
           repo = "gtsam";
-          rev = "develop";
-          sha256 = "sha256-Uf71hmnRN5sXK5gWgCGkKUQlLWQALWH332wEmMsmHZI=";
+          rev = gtsamRev;
+          sha256 = gtsamSha256;
         };
 
         commonBuildInputs = [
@@ -47,7 +55,7 @@
         # -----------------------------------------------------------
         gtsam-cpp = pkgs.stdenv.mkDerivation {
           pname = "gtsam";
-          version = "4.3a1-develop";
+          version = "${gtsamVersion}-${gtsamRev}";
 
           src = gtsam-src;
 
@@ -71,12 +79,10 @@
         mkWheel = pyVer: python:
           let
             pythonPackages = python.pkgs;
-            cpTag = "cp${pyVer}";
-            soSuffix = "cpython-${pyVer}-darwin.so";
           in
           pkgs.stdenv.mkDerivation {
-            pname = "gtsam-python-wheel-${cpTag}";
-            version = "4.3a1-develop";
+            pname = "gtsam-python-wheel-cp${pyVer}";
+            version = "${gtsamVersion}-${gtsamRev}";
 
             src = gtsam-src;
 
@@ -127,7 +133,6 @@
               otool -L "$SO_FILE"
 
               # Use a Python script for reliable dylib bundling
-              # (avoids shell quoting issues with install_name_tool and libc++ paths)
               ${python}/bin/python ${./bundle_dylibs.py} \
                 "$SO_DIR" \
                 "$DYLIB_DIR" \
@@ -213,7 +218,7 @@ print(f'Wrote: {whl_path}')
           ];
 
           shellHook = ''
-            echo "GTSAM build shell"
+            echo "GTSAM build shell (version: ${gtsamVersion}, rev: ${gtsamRev})"
             echo "  cmake, boost, eigen, tbb, python ${defaultPython.pythonVersion} available"
             echo ""
             echo "Build targets:"

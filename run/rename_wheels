@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Rename all wheels in wheels_input/ to gtsam_extended with normalized version
+set -euo pipefail
+cd "$(dirname "$0")/.."
+rm -rf renamed_wheels
+python3 rename_wheel.py "$@"
