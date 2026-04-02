@@ -33,7 +33,7 @@ keywords = ["gtsam", "slam", "robotics", "pose-graph", "isam2", "factor-graph"]
 
 [project.urls]
 Homepage = "https://gtsam.org/"
-Repository = "https://github.com/jeff-hykin/gtsam_macos"
+Repository = "https://github.com/jeff-hykin/gtsam-extended"
 
 [tool.setuptools]
 packages = ["gtsam_extended"]
