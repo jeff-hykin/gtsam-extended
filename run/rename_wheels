@@ -3,4 +3,4 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 rm -rf renamed_wheels
-python3 rename_wheel.py "$@"
+python3 "$(dirname "$0")/../rename_wheel.py" "$@"

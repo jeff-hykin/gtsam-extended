@@ -11,12 +11,12 @@ await $`cd ${FileSystem.thisFolder}/..`
 
 // Step 1: Download wheels from PyPI + collect local builds
 console.log("=== Step 1: Download and collect wheels ===")
-await $`python download_wheels.py`
+await $`python3 download_wheels.py`
 
 // Step 2: Rename all wheels to gtsam_extended
 console.log("\n=== Step 2: Rename wheels ===")
 await $`rm -rf ./renamed_wheels`
-await $`python rename_wheel.py`
+await $`python3 rename_wheel.py`
 
 // Check if renamed wheels exist
 if (!fs.existsSync(`./renamed_wheels`) || !fs.lstatSync(`./renamed_wheels`).isDirectory()) {
@@ -34,7 +34,7 @@ console.log(`\nFound ${wheels.length} wheel(s) to upload`)
 
 // Step 3: Validate wheels before upload
 console.log("\n=== Step 3: Validate ===")
-var { code: checkCode } = await $`twine check ${wheels}`
+var { code: checkCode } = await $`python3 -m twine check ${wheels}`
 if (checkCode !== 0) {
     console.error("ERROR: Wheel validation failed")
     Deno.exit(1)
@@ -43,7 +43,7 @@ if (checkCode !== 0) {
 // Step 4: Upload all wheels to PyPI
 await $`stty sane 2>/dev/null`
 console.log("\n=== Step 4: Upload to PyPI ===")
-var { code } = await $`twine upload ${wheels}`
+var { code } = await $`python3 -m twine upload ${wheels}`
 
 if (code !== 0) {
     console.error("ERROR: Upload failed")

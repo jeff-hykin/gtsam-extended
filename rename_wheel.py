@@ -135,6 +135,13 @@ def rename_wheel(wheel_path, output_dir, target_version):
             count=1,
             flags=re.MULTILINE,
         )
+        # Remove pytest from dependencies (erroneously included as non-dev dep by upstream)
+        metadata = re.sub(
+            r"^Requires-Dist: pytest[^\n]*\n",
+            "",
+            metadata,
+            flags=re.MULTILINE,
+        )
         metadata_path.write_text(metadata)
 
     # Rebuild RECORD

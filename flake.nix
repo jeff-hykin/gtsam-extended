@@ -215,6 +215,7 @@ print(f'Wrote: {whl_path}')
             defaultPythonPackages.numpy
             defaultPythonPackages.setuptools
             defaultPythonPackages.wheel
+            defaultPythonPackages.twine
           ];
 
           shellHook = ''

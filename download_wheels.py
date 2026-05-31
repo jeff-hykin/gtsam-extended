@@ -97,7 +97,13 @@ def collect_local_wheels(output_dir):
     collected = []
     for whl in local_wheels:
         dest = output_dir / whl.name
+        # Remove existing file first (may be read-only from previous Nix copy)
+        if dest.exists():
+            dest.chmod(0o644)
+            dest.unlink()
         shutil.copy2(whl, dest)
+        # Ensure writable so future runs can overwrite
+        dest.chmod(0o644)
         size_mb = dest.stat().st_size / (1024 * 1024)
         print(f"  Copied {whl.name} ({size_mb:.1f} MB)")
         collected.append(dest)
