@@ -27,7 +27,26 @@ KNOWN_DIST_NAMES = {"gtsam", "gtsam_develop", "gtsam_universal"}
 
 
 def get_target_version():
-    """Read the target version from pyproject.toml."""
+    """Resolve the gtsam-extended version all wheels are normalized to.
+
+    Order of precedence:
+      1. TARGET_VERSION env var (run/publish exports this so build + rename agree)
+      2. Derived from upstream gtsam-develop on PyPI (auto-tracks new releases)
+      3. pyproject.toml (last-resort offline fallback)
+    """
+    # 1. Explicit override.
+    env = os.environ.get("TARGET_VERSION")
+    if env:
+        return env
+    # 2. Track the latest upstream release.
+    try:
+        sys.path.insert(0, str(Path(__file__).parent / "run"))
+        from upstream_version import target_version
+        return target_version()
+    except Exception as e:
+        print(f"WARNING: could not derive version from upstream ({e}); "
+              f"falling back to pyproject.toml")
+    # 3. Whatever is pinned in pyproject.toml.
     pyproject = Path(__file__).parent / "pyproject.toml"
     if not pyproject.exists():
         print("ERROR: pyproject.toml not found")
@@ -181,7 +200,7 @@ def rename_wheel(wheel_path, output_dir, target_version):
 
 def main():
     target_version = get_target_version()
-    print(f"Target version (from pyproject.toml): {target_version}\n")
+    print(f"Target version: {target_version}\n")
 
     input_dir = Path("wheels_input")
 

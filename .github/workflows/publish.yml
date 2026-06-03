@@ -1,0 +1,74 @@
+name: Build and Publish
+
+# Builds the one wheel upstream gtsam-develop doesn't ship (cp310 macOS arm64,
+# via Nix), downloads every other wheel from upstream PyPI, renames everything to
+# gtsam-extended at a single normalized version, and uploads to PyPI.
+#
+# This replicates what `./run/publish` does locally — the only extra step is
+# building the cp310 wheel first (nix build .#gtsam-wheel-cp310).
+#
+# Runs on a macOS arm64 runner because the cp310 wheel is macOS arm64.
+# Trigger manually from the Actions tab, or via auto-update.yml on a new upstream
+# release.
+
+on:
+  # Manual fallback — trigger from the Actions tab.
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: "Build + rename only, skip the PyPI upload"
+        type: boolean
+        default: false
+  # Reusable — called by auto-update.yml when upstream publishes a new version.
+  workflow_call:
+    inputs:
+      skip_upload:
+        description: "Build + rename only, skip the PyPI upload"
+        type: boolean
+        default: false
+
+jobs:
+  build-and-publish:
+    runs-on: macos-14 # Apple silicon (arm64) — matches the cp310 wheel target
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Resolve version (pin upstream for the whole run)
+        run: |
+          # System python3 (stdlib only) is enough for upstream_version.py.
+          up=$(python3 run/upstream_version.py)
+          target=$(python3 run/upstream_version.py --target)
+          echo "Upstream gtsam-develop: $up"
+          echo "Publishing as:          $target"
+          # Pin both so download_wheels.py and rename_wheel.py agree on one release.
+          echo "UPSTREAM_VERSION=$up" >> "$GITHUB_ENV"
+          echo "TARGET_VERSION=$target" >> "$GITHUB_ENV"
+
+      - name: Build cp310 macOS arm64 wheel (Nix)
+        run: |
+          nix build .#gtsam-wheel-cp310 -o result-cp310
+          ls -lh result-cp310/*.whl
+
+      - name: Download upstream + rename + publish
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+          SKIP_UPLOAD: ${{ inputs.skip_upload && '1' || '' }}
+        run: |
+          # Run inside the flake devshell so python3 + twine are available.
+          nix develop --command bash -euo pipefail -c '
+            echo "=== Publishing gtsam-extended ${TARGET_VERSION} (upstream ${UPSTREAM_VERSION}) ==="
+            python3 download_wheels.py
+            rm -rf renamed_wheels
+            python3 rename_wheel.py
+            twine check renamed_wheels/*.whl
+            if [ -n "${SKIP_UPLOAD}" ]; then
+              echo "skip_upload set — not uploading. Wheels ready:"
+              ls -lh renamed_wheels/
+            else
+              twine upload --non-interactive --skip-existing renamed_wheels/*.whl
+            fi
+          '

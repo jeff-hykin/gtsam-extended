@@ -11,6 +11,7 @@ Sources:
 """
 
 import json
+import os
 import shutil
 import sys
 import urllib.request
@@ -46,8 +47,11 @@ def download_file(url, dest):
 def download_pypi_wheels(package_name, output_dir):
     """Download all wheels for the latest version of a PyPI package."""
     info = get_pypi_info(package_name)
-    version = info["info"]["version"]
-    print(f"\nLatest {package_name} version: {version}")
+    # Pin to a specific upstream release when requested (keeps the check,
+    # download, and rename steps consistent within a single publish run);
+    # otherwise take whatever PyPI reports as latest.
+    version = os.environ.get("UPSTREAM_VERSION") or info["info"]["version"]
+    print(f"\nUsing {package_name} version: {version}")
 
     files = info["releases"].get(version, [])
     wheels = [f for f in files if f["filename"].endswith(".whl")]

@@ -1,0 +1,45 @@
+name: Auto-update from upstream
+
+# Polls upstream gtsam-develop on PyPI daily. When upstream publishes a build we
+# haven't republished yet, it calls the publish workflow to build the cp310
+# macOS-arm64 wheel and upload gtsam-extended at the matching version.
+#
+# (PyPI has no push/webhook for "package updated", so polling on a schedule is
+# the standard approach.) Can also be run manually from the Actions tab.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily at 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_update: ${{ steps.compare.outputs.needs_update }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare upstream vs. published
+        id: compare
+        run: |
+          # The version gtsam-extended *would* publish for the current upstream build.
+          target=$(python3 run/upstream_version.py --target)
+          published=$(curl -s https://pypi.org/pypi/gtsam-extended/json \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['info']['version'])" \
+            || echo "none")
+          echo "upstream gtsam-develop -> target: $target"
+          echo "published gtsam-extended:         $published"
+          if [ "$target" != "$published" ]; then
+            echo "needs_update=true" >> "$GITHUB_OUTPUT"
+            echo "New upstream version detected — will build + publish."
+          else
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            echo "Already up to date."
+          fi
+
+  publish:
+    needs: check
+    if: needs.check.outputs.needs_update == 'true'
+    uses: ./.github/workflows/publish.yml
+    secrets: inherit
