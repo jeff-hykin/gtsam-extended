@@ -1,0 +1,65 @@
+name: Build cp310 linux-aarch64 wheel
+
+# Builds the one Linux wheel upstream gtsam-develop doesn't ship: Python 3.10,
+# manylinux2014 aarch64. Mirrors borglab/gtsam's own prod-cibw recipe (cibuildwheel
+# on an ubuntu-24.04-arm runner) but for the single cp310 aarch64 target.
+#
+# Output is uploaded as an artifact for now. Once validated, the wheel can be fed
+# into the publish pipeline alongside the cp310 macOS arm64 wheel.
+
+on:
+  workflow_dispatch:
+    inputs:
+      gtsam_ref:
+        description: "borglab/gtsam git ref to build from"
+        default: "develop"
+
+jobs:
+  build:
+    name: cp310 manylinux2014 aarch64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout borglab/gtsam source
+        uses: actions/checkout@v4
+        with:
+          repository: borglab/gtsam
+          ref: ${{ inputs.gtsam_ref }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install host dependencies
+        run: |
+          python3 -m pip install -r python/dev_requirements.txt
+          sudo apt update
+          sudo apt-get install -y libicu-dev python3-pip python3-setuptools libboost-all-dev ninja-build
+
+      # Build the wrapper module on the host first — cibuildwheel expects the
+      # generated setup.py in build/python. The container rebuilds it for the
+      # target platform via cibw_before_all.sh.
+      - name: Run CMake (host)
+        run: cmake -B build -G Ninja -DGTSAM_BUILD_PYTHON=1 -DGTSAM_PYTHON_VERSION=3.10
+
+      - name: Build wheel (cibuildwheel)
+        env:
+          CIBW_BUILD: cp310-manylinux_aarch64
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
+          CIBW_ARCHS: all
+          CIBW_BUILD_FRONTEND: "build"
+          CIBW_BEFORE_ALL: bash .github/scripts/python_wheels/cibw_before_all.sh 3.10 {project}
+          CIBW_BUILD_VERBOSITY: 1
+        run: bash .github/scripts/python_wheels/build_wheels.sh
+
+      - name: Test the wheel
+        run: |
+          python3 -m pip install wheelhouse/*.whl
+          python3 -c "import platform; print(platform.machine()); import gtsam; print('import gtsam OK')"
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtsam-cp310-manylinux2014-aarch64
+          path: wheelhouse/*.whl
