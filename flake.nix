@@ -17,7 +17,7 @@
         # GTSAM version config — change these to build a different version
         gtsamVersion = "4.3a1";
         gtsamRev = "develop";  # git tag, branch, or commit hash
-        gtsamSha256 = "sha256-Uf71hmnRN5sXK5gWgCGkKUQlLWQALWH332wEmMsmHZI=";
+        gtsamSha256 = "sha256-0kmqF3i+6xtRfr3Rl/o85fPaE14MC5ydBXN/t6K0V/c=";
 
         # All Python versions we build wheels for
         pythonVersions = {
