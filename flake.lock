@@ -18,6 +18,23 @@
         "type": "github"
       }
     },
+    "gtsam-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1782505293,
+        "narHash": "sha256-0kmqF3i+6xtRfr3Rl/o85fPaE14MC5ydBXN/t6K0V/c=",
+        "owner": "borglab",
+        "repo": "gtsam",
+        "rev": "64eeadc118a175b9a06204d883e8ddb5b821902b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "borglab",
+        "ref": "develop",
+        "repo": "gtsam",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1774106199,
@@ -53,6 +70,7 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "gtsam-src": "gtsam-src",
         "nixpkgs": "nixpkgs",
         "nixpkgs-stable": "nixpkgs-stable"
       }

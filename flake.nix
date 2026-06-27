@@ -6,18 +6,25 @@
     # nixos-24.11 still has python310
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-24.11";
     flake-utils.url = "github:numtide/flake-utils";
+    # GTSAM source as an updatable input. `nix flake update gtsam-src` re-pins
+    # to the latest develop commit and records its hash in flake.lock — no manual
+    # sha256 bumping when the moving develop branch advances.
+    gtsam-src = {
+      url = "github:borglab/gtsam/develop";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-stable, flake-utils, ... }:
+  outputs = { self, nixpkgs, nixpkgs-stable, flake-utils, gtsam-src, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
         pkgs-stable = import nixpkgs-stable { inherit system; };
 
-        # GTSAM version config — change these to build a different version
+        # GTSAM version config. The source itself comes from the gtsam-src
+        # flake input (pinned in flake.lock); these strings only label the build.
         gtsamVersion = "4.3a1";
-        gtsamRev = "develop";  # git tag, branch, or commit hash
-        gtsamSha256 = "sha256-0kmqF3i+6xtRfr3Rl/o85fPaE14MC5ydBXN/t6K0V/c=";
+        gtsamRev = "develop";  # label only — actual commit is pinned in flake.lock
 
         # All Python versions we build wheels for
         pythonVersions = {
@@ -25,13 +32,6 @@
           "311" = pkgs.python311;
           "312" = pkgs.python312;
           "313" = pkgs.python313;
-        };
-
-        gtsam-src = pkgs.fetchFromGitHub {
-          owner = "borglab";
-          repo = "gtsam";
-          rev = gtsamRev;
-          sha256 = gtsamSha256;
         };
 
         commonBuildInputs = [

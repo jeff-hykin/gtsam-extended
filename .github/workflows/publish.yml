@@ -58,6 +58,13 @@ jobs:
           echo "UPSTREAM_VERSION=$up" >> "$GITHUB_ENV"
           echo "TARGET_VERSION=$target" >> "$GITHUB_ENV"
 
+      - name: Pin gtsam-src to the latest develop commit
+        run: |
+          # Re-pin the gtsam-src flake input (and refresh its hash in flake.lock)
+          # so each publish builds from the current develop tip. This is what makes
+          # the build self-healing: no manual sha256 bump when develop advances.
+          nix flake update gtsam-src
+
       - name: Build cp310 macOS arm64 wheel (Nix)
         run: |
           nix build .#gtsam-wheel-cp310 -o result-cp310
