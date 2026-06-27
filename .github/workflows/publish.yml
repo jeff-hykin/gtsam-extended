@@ -1,13 +1,16 @@
 name: Build and Publish
 
-# Builds the one wheel upstream gtsam-develop doesn't ship (cp310 macOS arm64,
-# via Nix), downloads every other wheel from upstream PyPI, renames everything to
-# gtsam-extended at a single normalized version, and uploads to PyPI.
+# Builds the two wheels upstream gtsam-develop doesn't ship — cp310 macOS arm64
+# (via Nix, on macos-14) and cp310 linux aarch64 (via cibuildwheel, on
+# ubuntu-24.04-arm) — downloads every other wheel from upstream PyPI, renames
+# everything to gtsam-extended at a single normalized version, and uploads to PyPI.
 #
-# This replicates what `./run/publish` does locally — the only extra step is
-# building the cp310 wheel first (nix build .#gtsam-wheel-cp310).
+# This replicates what `./run/publish` does locally, plus building the two
+# missing cp310 wheels first.
 #
-# Runs on a macOS arm64 runner because the cp310 wheel is macOS arm64.
+# The publish job runs on a macOS arm64 runner (for the Nix cp310 mac wheel); the
+# cp310 linux-aarch64 wheel is built by the reusable build-cp310-linux-arm.yml job
+# and pulled in as an artifact.
 # Trigger manually from the Actions tab, or via auto-update.yml on a new upstream
 # release.
 
@@ -28,8 +31,16 @@ on:
         default: false
 
 jobs:
+  # Build the cp310 linux-aarch64 wheel on an ubuntu-24.04-arm runner. Its wheel
+  # artifact (gtsam-cp310-manylinux2014-aarch64) is consumed by build-and-publish.
+  build-linux-arm:
+    uses: ./.github/workflows/build-cp310-linux-arm.yml
+    with:
+      gtsam_ref: develop
+
   build-and-publish:
-    runs-on: macos-14 # Apple silicon (arm64) — matches the cp310 wheel target
+    needs: build-linux-arm
+    runs-on: macos-14 # Apple silicon (arm64) — matches the cp310 mac wheel target
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +62,20 @@ jobs:
         run: |
           nix build .#gtsam-wheel-cp310 -o result-cp310
           ls -lh result-cp310/*.whl
+
+      - name: Download cp310 linux-aarch64 wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gtsam-cp310-manylinux2014-aarch64
+          path: arm-artifact
+
+      - name: Stage linux-aarch64 wheel for collection
+        run: |
+          # download_wheels.py collects local wheels from result/ and result-*/.
+          # Copy (recursively, to be robust to artifact nesting) into a result-* dir.
+          mkdir -p result-cp310-linux-arm
+          find arm-artifact -name '*.whl' -exec cp {} result-cp310-linux-arm/ \;
+          ls -lh result-cp310-linux-arm/
 
       - name: Download upstream + rename + publish
         env:

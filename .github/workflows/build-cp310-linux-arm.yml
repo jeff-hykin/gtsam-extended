@@ -4,14 +4,22 @@ name: Build cp310 linux-aarch64 wheel
 # manylinux2014 aarch64. Mirrors borglab/gtsam's own prod-cibw recipe (cibuildwheel
 # on an ubuntu-24.04-arm runner) but for the single cp310 aarch64 target.
 #
-# Output is uploaded as an artifact for now. Once validated, the wheel can be fed
-# into the publish pipeline alongside the cp310 macOS arm64 wheel.
+# The wheel is uploaded as an artifact named gtsam-cp310-manylinux2014-aarch64.
+# publish.yml calls this workflow (workflow_call) and feeds that artifact into the
+# rename+upload step, so the cp310 linux-aarch64 wheel republishes on every
+# upstream release alongside the cp310 macOS arm64 wheel.
 
 on:
   workflow_dispatch:
     inputs:
       gtsam_ref:
         description: "borglab/gtsam git ref to build from"
+        default: "develop"
+  workflow_call:
+    inputs:
+      gtsam_ref:
+        description: "borglab/gtsam git ref to build from"
+        type: string
         default: "develop"
 
 jobs:

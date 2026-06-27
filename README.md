@@ -16,7 +16,7 @@ Works as a drop-in replacement — just `import gtsam` as usual.
 
 | | macOS (arm64 + x86_64) | Linux x86_64 | Linux aarch64 (Jetson) |
 |---|---|---|---|
-| Python 3.10 | yes (nix-built) | - | - |
+| Python 3.10 | yes (nix-built) | - | yes (cibuildwheel) |
 | Python 3.11 | yes | yes | yes |
 | Python 3.12 | yes | yes | yes |
 | Python 3.13 | yes | yes | yes |
